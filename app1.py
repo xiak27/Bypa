@@ -1,6 +1,6 @@
 import os
 from flask import Flask, request, jsonify
-from auth_client import AutoBypassClient
+from auth_client1 import AutoBypassClient
 
 app = Flask(__name__)
 client = AutoBypassClient()
