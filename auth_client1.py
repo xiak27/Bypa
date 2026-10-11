@@ -7,21 +7,21 @@ class AutoBypassClient:
         self.base_url = "https://baconbypass.xyz"
 
     def execute_full_auto(self, target_url):
-        """
-        全自动形态：驱动系统浏览器过盾 -> 自动提取 Token -> 浏览器内安全发起 API 请求
-        """
-        # 配置 DrissionPage 适配 Termux/Android 沙盒环境
+        # 配置 DrissionPage
         co = ChromiumOptions()
-        co.headless(True)  # 设置为无头模式（后台默默运行，不弹窗）
+        co.headless(True)  # 后台静默无头运行
         co.set_argument('--no-sandbox')
         co.set_argument('--disable-gpu')
+        
+        # 💡 核心修复：显式指定 Termux 中 Chromium 的绝对路径
+        co.set_browser_path('/data/data/com.termux/files/usr/bin/chromium')
         
         page = ChromiumPage(co)
         try:
             print("[AutoAgent] 正在启动系统浏览器过 Cloudflare 盾...")
             # 1. 访问主站，触发并自动通过 Cloudflare JS 挑战
             page.get(self.base_url)
-            time.sleep(3.5) # 等待盾完全加载并放行
+            time.sleep(3.5)
 
             # 2. 访问目标 Platoboost 页面以自动获取初始 Token
             print(f"[AutoAgent] 正在访问目标页面: {target_url}")
@@ -37,8 +37,7 @@ class AutoBypassClient:
             initial_token = match.group(1)
             print(f"[AutoAgent] 成功自动提取 Token: {initial_token[:15]}...")
 
-            # 4. 直接在浏览器上下文中通过 fetch 发送请求
-            # 这样可以完美继承浏览器刚刚过盾拿到的所有 Cookie（cf_clearance），绝不出现 403
+            # 4. 在浏览器上下文中通过 fetch 发送请求（完美继承 cf_clearance Cookie）
             print(f"[AutoAgent] 正在通过浏览器上下文请求 Challenge...")
             challenge_res = page.run_js(f"""
                 return fetch('{self.base_url}/api/token2/challenge', {{
@@ -75,5 +74,4 @@ class AutoBypassClient:
         except Exception as e:
             return {"status": "error", "message": f"浏览器自动化执行异常: {str(e)}"}
         finally:
-            # 确保每次跑完安全关闭浏览器进程，防止内存泄露
             page.quit()
