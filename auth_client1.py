@@ -1,56 +1,29 @@
-import re
 import time
 from curl_cffi import requests as c_requests
 
 class AutoBypassClient:
     def __init__(self):
-        # 初始化带 Chrome TLS 指纹伪装的 Session，自动维护 Cookie
         self.session = c_requests.Session(impersonate="chrome")
         self.base_url = "https://baconbypass.xyz"
+        
+        # 💡 在这里填入你通过浏览器获取一次的长效 cf_clearance（通常能用好几天）
+        # 只要填了一次，接下来的几天内所有链接全自动跑通！
+        self.cf_clearance = "_VN6rlq7MZVtskHEfwdF882x09evqc.9Ig7tmKQgmJQ-1791687304-1.2.1.1-bPb3rLvs5S6qiX289Azvsb9GKy86iL_889UlkZXivv_brow49JQ9cNrq9QhAcUb51iEa3vHYmZo6Ic5nqoXuljOGjS25yb7j1MdLfxP4XcSgkIK7Jvm_EHdZYtat9R7COh0h522t2GoBiEuaQSlOffMKUztwsRa9Ze2FsU9sG3_6HPPMPsKJx4kFZK8A99PvK_i_m6B3eosVOxvcKbu9fiQPt7w1Hd8WGbt2q.VdeQ.6U3yiZ9EiT28X1I3Bp8xek5bfD0HOyTbr01an2E1pfF_A9foDJ.NOkcqYAYOMaA8mQ9OX8pjFR9MT1vXsuvii5o8LOIAHXRzt_VzG9p7LL7NCTTgbCvgGyWop2kYoKexyjD7iuHCJM4z6U8BIviV7jGPFbvCJ8eHLJg.e0lPtfgSYEq9ZQprp6hMJDoS_ex9san1lATDT9qxWJo2nNpiE"
+        
         self.headers = {
             "Origin": self.base_url,
             "Referer": f"{self.base_url}/",
             "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Mobile Safari/537.36 EdgA/153.0.0.0"
+            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Mobile Safari/537.36 EdgA/153.0.0.0",
+            "Cookie": f"cf_clearance={self.cf_clearance}"
         }
 
-    def extract_token_from_target(self, target_url):
+    def execute_full_auto(self, target_url, initial_token):
         """
-        全自动核心：访问目标 Platoboost 链接，从网页源码中自动提取初始 token
+        使用长效 Cookie 自动完成 Challenge -> Bypass 全流程
         """
         try:
-            print(f"[AutoAgent] 正在访问目标页面以提取 Token: {target_url}")
-            res = self.session.get(target_url, headers={"User-Agent": self.headers["User-Agent"]}, timeout=15)
-            if res.status_code != 200:
-                return None, f"访问目标页面失败 (HTTP {res.status_code})"
-            
-            html_content = res.text
-            
-            # 使用正则匹配 Platoboost 页面中常见的以 "1." 开头的初始化令牌
-            match = re.search(r'(1\.[A-Za-z0-9_\-\.]+)', html_content)
-            if match:
-                initial_token = match.group(1)
-                return initial_token, None
-            
-            return None, "未能在目标页面源码中自动匹配到初始化 token"
-        except Exception as e:
-            return None, f"提取 Token 异常: {str(e)}"
-
-    def execute_full_auto(self, target_url):
-        """
-        一键全自动执行流：
-        URL -> 自动解析 Token -> Challenge 获取 token2 -> 最终 Bypass 结果
-        """
-        # 步骤 1：自动提取 Token
-        initial_token, err = self.extract_token_from_target(target_url)
-        if not initial_token:
-            return {"status": "error", "message": err}
-
-        print(f"[AutoAgent] 成功自动提取 Token，开始进行底层挑战...")
-        time.sleep(1.0)
-
-        try:
-            # 步骤 2：请求 challenge 接口获取 token2
+            print(f"[AutoAgent] 正在请求 Challenge 接口...")
             challenge_res = self.session.post(
                 f"{self.base_url}/api/token2/challenge",
                 json={"token": initial_token},
@@ -59,16 +32,19 @@ class AutoBypassClient:
             )
 
             if challenge_res.status_code != 200:
-                return {"status": "error", "message": f"Challenge 阶段失败 (HTTP {challenge_res.status_code})"}
+                return {
+                    "status": "error", 
+                    "message": f"Challenge 阶段失败 (HTTP {challenge_res.status_code})。提示：可能是长效 cf_clearance 已过期，需更新一次。",
+                    "raw": challenge_res.text
+                }
 
             token2 = challenge_res.json().get("data")
             if not token2:
                 return {"status": "error", "message": "未能从 Challenge 响应中解析到 token2"}
 
-            print(f"[AutoAgent] 成功获取 token2，正在向绕过接口提交...")
             time.sleep(1.0)
 
-            # 步骤 3：正式请求 bypass 接口
+            print(f"[AutoAgent] 正在请求最终 Bypass...")
             bypass_res = self.session.post(
                 f"{self.base_url}/api/bypass",
                 json={"url": target_url, "token2": token2},
@@ -79,17 +55,14 @@ class AutoBypassClient:
             if bypass_res.status_code != 200:
                 return {"status": "error", "message": f"Bypass 阶段失败 (HTTP {bypass_res.status_code})"}
 
-            bypass_data = bypass_res.json()
-            result_url = bypass_data.get("result")
-
+            result_url = bypass_res.json().get("result")
             if not result_url:
                 return {"status": "error", "message": "Bypass 成功但未返回结果链接"}
 
-            print(f"[AutoAgent] 绕过大功告成！")
             return {
                 "status": "success",
                 "result": result_url
             }
 
         except Exception as e:
-            return {"status": "error", "message": f"全自动执行异常: {str(e)}"}
+            return {"status": "error", "message": f"执行异常: {str(e)}"}
